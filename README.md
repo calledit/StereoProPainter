@@ -27,4 +27,11 @@ In propainter this is done by selecting the adversarial_weight by default propai
 
 To make StereProPainter better at stereo inpainting the adversarial_weight was increased as the holes are quite small and making correct guesses should be fairly easy. A specific issue with stereo inpainting is that you often have to draw over the edge between foreground and background and this does not look good when blurred this mean we have a bigger incentive than in many other infill scenarios to push up the realism as it means we get rid of the blur that is extra problematic in stereo inpainting.
 
-Since there is a certain patern to how stereo infill masks are created there is also a certain patern to how one can infill them to make the model better att using that pattern in its inpanting StereProPainter was retrained with reprojected images.
+While most holes are small there are still is sections where the holes are quite big in these holes you dont want the model to guess about details in the image. You want to rely more on L1 loss there. If you let the descriminator make the generator guess about what should be in those areas it will halucinate wildly. In test anything that is more than about 10 pixels away from real known data and has complex pattern (ie the image is not obvoiusly something like a solid colored wall) will start to be infilled with halucinated artifacts.
+
+StereProPainter way to deal with this can be to blur the distant regions when traning the descriminator. That works but since bluring with a simple kernel and bluring as produced with an ai tranied with L1 loss are slightly diffrent that may lead to worse results. The best solution would be to blur using a network that was only trained on a L1 loss. But that is in practicallity to expensive.
+On top of that a second disriminator was added.
+
+Since there is a certain patern to how stereo infill masks are created there is also a certain patern to how one can infill them to make the model better att using that pattern in its inpanting StereProPainter was finetuned with reprojected images.
+
+
