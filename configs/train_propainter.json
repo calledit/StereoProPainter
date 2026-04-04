@@ -3,7 +3,7 @@
     "save_dir": "experiments_model/",
     "train_data_loader": {
         "name": "youtube-vos",
-        "video_root": "your_video_root",
+        "video_root": "datasets\\youtube-vos\\JPEGImages",
         "flow_root": "your_flow_root",
         "w": 432,
         "h": 240,
@@ -30,13 +30,14 @@
         "type": "Adam",
         "beta1": 0,
         "beta2": 0.99,
-        "lr": 1e-4,
-        "batch_size": 8,
-        "num_workers": 8,
-        "num_prefetch_queue": 8,
+        "lr": 1e-5,
+        "batch_size": 1,
+        "num_workers": 4,
+        "num_prefetch_queue": 4,
         "log_freq": 100,
-        "save_freq": 1e4,
+        "save_freq": 5e3,
         "iterations": 700e3,
+		"iterations_org": 700e3,
         "scheduler": {
             "type": "MultiStepLR",
             "milestones": [

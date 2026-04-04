@@ -98,17 +98,24 @@ def to_tensors():
 class GroupRandomHorizontalFlowFlip(object):
     """Randomly horizontally flips the given PIL.Image with a probability of 0.5
     """
-    def __call__(self, img_group, flowF_group, flowB_group):
+    def __call__(self, img_group, scaled_influences, mask_grp, flowF_group, flowB_group):
         v = random.random()
         if v < 0.5:
             ret_img = [
                 img.transpose(Image.FLIP_LEFT_RIGHT) for img in img_group
             ]
+            ret_scaled_influences = [
+                img.transpose(Image.FLIP_LEFT_RIGHT) for img in scaled_influences
+            ]
+            flipped_mask = [
+                img.transpose(Image.FLIP_LEFT_RIGHT) for img in mask_grp
+            ]
+            #flipped_mask = [np.flip(img, axis=1) for img in mask_grp]
             ret_flowF = [ff[:, ::-1] * [-1.0, 1.0] for ff in flowF_group]
             ret_flowB = [fb[:, ::-1] * [-1.0, 1.0] for fb in flowB_group]
-            return ret_img, ret_flowF, ret_flowB
+            return ret_img, ret_scaled_influences, flipped_mask, ret_flowF, ret_flowB
         else:
-            return img_group, flowF_group, flowB_group
+            return img_group, scaled_influences, mask_grp, flowF_group, flowB_group
 
 
 class GroupRandomHorizontalFlip(object):
@@ -293,7 +300,15 @@ def get_random_shape(edge_num=9, ratio=0.7, width=432, height=240):
     ax.axis('off')  # removes the axis to leave only the shape
     fig.canvas.draw()
     # convert plt images into numpy images
-    data = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+    
+    # Hämta RGBA-buffer och konvertera till numpy array
+    rgba_array = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+    rgba_array = np.array(rgba_array.reshape(fig.canvas.get_width_height()[::-1] + (4,)), copy=True)
+
+    # Om du absolut behöver RGB (ta bort Alpha-kanalen):
+    rgb_array = np.array(rgba_array[:, :, :3], copy=True)
+    
+    data = np.frombuffer(rgb_array, dtype=np.uint8)
     data = data.reshape((fig.canvas.get_width_height()[::-1] + (3,)))
     plt.close(fig)
     # postprocess

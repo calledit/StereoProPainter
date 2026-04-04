@@ -64,8 +64,18 @@ if __name__ == '__main__':
         for i in range(len_m-1):
             img1_path = os.path.join(root_path, f, m_list[i])
             img2_path = os.path.join(root_path, f, m_list[i+1])
-            img1 = Image.fromarray(cv2.imread(img1_path))
-            img2 = Image.fromarray(cv2.imread(img2_path))
+            
+            save_flow_f = os.path.join(save_path, f, f'{m_list[i][:-4]}_{m_list[i+1][:-4]}_f.flo')
+            save_flow_b = os.path.join(save_path, f, f'{m_list[i+1][:-4]}_{m_list[i][:-4]}_b.flo')
+            
+            if os.path.isfile(save_flow_f) and os.path.isfile(save_flow_b):
+                continue
+            try:
+                img1 = Image.fromarray(cv2.imread(img1_path))
+                img2 = Image.fromarray(cv2.imread(img2_path))
+            except:
+                print("fail flow: " + img1_path + " -> " + img2_path)
+                exit()
 
             transform = transforms.Compose([transforms.ToTensor()])
 
@@ -101,8 +111,7 @@ if __name__ == '__main__':
             # flow_f = resize_flow(flow_f, h_new, w_new)
             # flow_b = resize_flow(flow_b, h_new, w_new)
 
-            save_flow_f = os.path.join(save_path, f, f'{m_list[i][:-4]}_{m_list[i+1][:-4]}_f.flo')
-            save_flow_b = os.path.join(save_path, f, f'{m_list[i+1][:-4]}_{m_list[i][:-4]}_b.flo')
+            
             
             flowwrite(flow_f, save_flow_f, quantize=False)
             flowwrite(flow_b, save_flow_b, quantize=False)

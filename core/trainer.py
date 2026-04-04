@@ -94,7 +94,11 @@ class Trainer:
                 self.netD = net.Discriminator(  
                     in_channels=3,
                     use_sigmoid=config['losses']['GAN_LOSS'] != 'hinge')
+                self.netD2 = net.Discriminator(  
+                    in_channels=3,
+                    use_sigmoid=config['losses']['GAN_LOSS'] != 'hinge')
             self.netD = self.netD.to(self.config['device'])
+            self.netD2 = self.netD.to(self.config['device'])
         
         self.interp_mode = self.config['model']['interp_mode']
         # setup optimizers and schedulers
@@ -110,6 +114,11 @@ class Trainer:
                             find_unused_parameters=True)
             if not self.config['model']['no_dis']:
                 self.netD = DDP(self.netD,
+                                device_ids=[self.config['local_rank']],
+                                output_device=self.config['local_rank'],
+                                broadcast_buffers=True,
+                                find_unused_parameters=False)
+                self.netD2 = DDP(self.netD2,
                                 device_ids=[self.config['local_rank']],
                                 output_device=self.config['local_rank'],
                                 broadcast_buffers=True,
@@ -149,6 +158,11 @@ class Trainer:
         if not self.config['model']['no_dis']:
             self.optimD = torch.optim.Adam(
                 self.netD.parameters(),
+                lr=self.config['trainer']['lr'],
+                betas=(self.config['trainer']['beta1'],
+                       self.config['trainer']['beta2']))
+            self.optimD2 = torch.optim.Adam(
+                self.netD2.parameters(),
                 lr=self.config['trainer']['lr'],
                 betas=(self.config['trainer']['beta1'],
                        self.config['trainer']['beta2']))
@@ -225,6 +239,8 @@ class Trainer:
                                     f'gen_{int(latest_epoch):06d}.pth')
             dis_path = os.path.join(model_path,
                                     f'dis_{int(latest_epoch):06d}.pth')
+            dis2_path = os.path.join(model_path,
+                                    f'dis2_{int(latest_epoch):06d}.pth')
             opt_path = os.path.join(model_path,
                                     f'opt_{int(latest_epoch):06d}.pth')
 
@@ -235,18 +251,24 @@ class Trainer:
             if not self.config['model']['no_dis'] and self.config['model']['load_d']:
                 dataD = torch.load(dis_path, map_location=self.config['device'])
                 self.netD.load_state_dict(dataD)
-
-            data_opt = torch.load(opt_path, map_location=self.config['device'])
-            self.optimG.load_state_dict(data_opt['optimG'])
-            # self.scheG.load_state_dict(data_opt['scheG'])
-            if not self.config['model']['no_dis'] and self.config['model']['load_d']:
-                self.optimD.load_state_dict(data_opt['optimD'])
-                # self.scheD.load_state_dict(data_opt['scheD'])
-            self.epoch = data_opt['epoch']
-            self.iteration = data_opt['iteration']
+                
+                dataD2 = torch.load(dis2_path, map_location=self.config['device'])
+                self.netD2.load_state_dict(dataD2)
+            
+            if os.path.isfile(opt_path):
+                data_opt = torch.load(opt_path, map_location=self.config['device'])
+                self.optimG.load_state_dict(data_opt['optimG'])
+                # self.scheG.load_state_dict(data_opt['scheG'])
+                if not self.config['model']['no_dis'] and self.config['model']['load_d']:
+                    self.optimD.load_state_dict(data_opt['optimD'])
+                    self.optimD2.load_state_dict(data_opt['optimD2'])
+                    # self.scheD.load_state_dict(data_opt['scheD'])
+                self.epoch = data_opt['epoch']
+                self.iteration = data_opt['iteration']
         else:
             gen_path = self.config['trainer'].get('gen_path', None)
             dis_path = self.config['trainer'].get('dis_path', None)
+            dis2_path = self.config['trainer'].get('dis2_path', None)
             opt_path = self.config['trainer'].get('opt_path', None)
             if gen_path is not None:
                 if self.config['global_rank'] == 0:
@@ -259,6 +281,8 @@ class Trainer:
                         print(f'Loading Dis-Net from {dis_path}...')
                     dataD = torch.load(dis_path, map_location=self.config['device'])
                     self.netD.load_state_dict(dataD)
+                    dataD = torch.load(dis2_path, map_location=self.config['device'])
+                    self.netD2.load_state_dict(dataD)
                 if opt_path is not None:
                     data_opt = torch.load(opt_path, map_location=self.config['device'])
                     self.optimG.load_state_dict(data_opt['optimG'])
@@ -279,6 +303,8 @@ class Trainer:
                                     f'gen_{it:06d}.pth')
             dis_path = os.path.join(self.config['save_dir'],
                                     f'dis_{it:06d}.pth')
+            dis2_path = os.path.join(self.config['save_dir'],
+                                    f'dis2_{it:06d}.pth')
             opt_path = os.path.join(self.config['save_dir'],
                                     f'opt_{it:06d}.pth')
             print(f'\nsaving model to {gen_path} ...')
@@ -288,21 +314,25 @@ class Trainer:
                 netG = self.netG.module
                 if not self.config['model']['no_dis']:
                     netD = self.netD.module
+                    netD2 = self.netD2.module
             else:
                 netG = self.netG
                 if not self.config['model']['no_dis']:
                     netD = self.netD
+                    netD2 = self.netD2
 
             # save checkpoints
             torch.save(netG.state_dict(), gen_path)
             if not self.config['model']['no_dis']:
                 torch.save(netD.state_dict(), dis_path)
+                torch.save(netD2.state_dict(), dis2_path)
                 torch.save(
                     {
                         'epoch': self.epoch,
                         'iteration': self.iteration,
                         'optimG': self.optimG.state_dict(),
                         'optimD': self.optimD.state_dict(),
+                        'optimD2': self.optimD2.state_dict(),
                         'scheG': self.scheG.state_dict(),
                         'scheD': self.scheD.state_dict()
                     }, opt_path)
@@ -351,10 +381,13 @@ class Trainer:
         """Process input and calculate loss every training epoch"""
         device = self.config['device']
         train_data = self.prefetcher.next()
+        
+        train_generator = True
+        
         while train_data is not None:
             self.iteration += 1
-            frames, masks, flows_f, flows_b, _ = train_data
-            frames, masks = frames.to(device), masks.to(device).float()
+            frames, masks, scaled_influences, flows_f, flows_b, _ = train_data
+            frames, masks, scaled_influences = frames.to(device), masks.to(device).float(), scaled_influences.to(device)
             l_t = self.num_local_frames
             b, t, c, h, w = frames.size()
             gt_local_frames = frames[:, :l_t, ...]
@@ -374,15 +407,21 @@ class Trainer:
             # pred_flows_bi = gt_flows_bi
 
             # ---- image propagation ----
-            prop_imgs, updated_local_masks = self.netG.module.img_propagation(masked_local_frames, pred_flows_bi, local_masks, interpolation=self.interp_mode)
+            netG_real = self.netG.module if hasattr(self.netG, 'module') else self.netG
+            prop_imgs, updated_local_masks = netG_real.img_propagation(masked_local_frames, pred_flows_bi, local_masks, interpolation=self.interp_mode)
             updated_masks = masks.clone()
             updated_masks[:, :l_t, ...] = updated_local_masks.view(b, l_t, 1, h, w)
             updated_frames = masked_frames.clone()
             prop_local_frames = gt_local_frames * (1-local_masks) + prop_imgs.view(b, l_t, 3, h, w) * local_masks # merge
             updated_frames[:, :l_t, ...] = prop_local_frames
 
-            # ---- feature propagation + Transformer ----
-            pred_imgs = self.netG(updated_frames, pred_flows_bi, masks, updated_masks, l_t)
+            # ---- feature propagation + Transformer 
+            if train_generator:
+                pred_imgs = self.netG(updated_frames, pred_flows_bi, masks, updated_masks, l_t)
+            else:
+                with torch.inference_mode():
+                    pred_imgs = self.netG(updated_frames, pred_flows_bi, masks, updated_masks, l_t)
+                    
             pred_imgs = pred_imgs.view(b, -1, c, h, w)
 
             # get the local frames
@@ -392,49 +431,112 @@ class Trainer:
 
             gen_loss = 0
             dis_loss = 0
+            dis2_loss = 0
             # optimize net_g
             if not self.config['model']['no_dis']:
                 for p in self.netD.parameters():
                     p.requires_grad = False
+                for p in self.netD2.parameters():
+                    p.requires_grad = False
 
-            self.optimG.zero_grad()
+            
+            
+            
+            d2downscale = 4
+            B, T, C, H, W = comp_imgs.shape
 
-            # generator l1 loss
-            hole_loss = self.l1_loss(pred_imgs * masks, frames * masks)
-            hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
-            gen_loss += hole_loss
-            self.add_summary(self.gen_writer, 'loss/hole_loss', hole_loss.item())
+            # reshape to (B*T, C, H, W)
+            imgs_2d = comp_imgs.view(B * T, C, H, W)
 
-            valid_loss = self.l1_loss(pred_imgs * (1 - masks), frames * (1 - masks))
-            valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
-            gen_loss += valid_loss
-            self.add_summary(self.gen_writer, 'loss/valid_loss', valid_loss.item())
+            # downscale (example: 1/2 resolution)
+            imgs_2d_small = F.interpolate(
+                imgs_2d,
+                scale_factor=1.0/d2downscale,
+                mode='bilinear',
+                align_corners=False
+            )
 
-            # perceptual loss
-            if self.config['losses']['perceptual_weight'] > 0:
-                perc_loss = self.perc_loss(pred_imgs.view(-1,3,h,w), frames.view(-1,3,h,w))[0] * self.config['losses']['perceptual_weight']
-                gen_loss += perc_loss
-                self.add_summary(self.gen_writer, 'loss/perc_loss', perc_loss.item())
+            # reshape back to video
+            comp_imgs_small = imgs_2d_small.view(B, T, C, H // d2downscale, W // d2downscale)
+            
+            
+            
+            
+            hole_loss = torch.tensor(99)
+            valid_loss = torch.tensor(99)
+            
+            if train_generator:
+                
+                self.optimG.zero_grad()
+                
+                # generator l1 loss
+                hole_loss = self.l1_loss(pred_imgs * masks, frames * masks)
+                hole_loss = hole_loss / torch.mean(masks) * self.config['losses']['hole_weight']
+                gen_loss += hole_loss
+                self.add_summary(self.gen_writer, 'loss/hole_loss', hole_loss.item())
 
-            # gan loss
-            if not self.config['model']['no_dis']:
-                # generator adversarial loss
-                gen_clip = self.netD(comp_imgs)
-                gan_loss = self.adversarial_loss(gen_clip, True, False)
-                gan_loss = gan_loss * self.config['losses']['adversarial_weight']
-                gen_loss += gan_loss
-                self.add_summary(self.gen_writer, 'loss/gan_loss', gan_loss.item())
-            gen_loss.backward()
-            self.optimG.step()
+                valid_loss = self.l1_loss(pred_imgs * (1 - masks), frames * (1 - masks))
+                valid_loss = valid_loss / torch.mean(1-masks) * self.config['losses']['valid_weight']
+                gen_loss += valid_loss
+                self.add_summary(self.gen_writer, 'loss/valid_loss', valid_loss.item())
 
-            if not self.config['model']['no_dis']:
+                # perceptual loss
+                if self.config['losses']['perceptual_weight'] > 0:
+                    perc_loss = self.perc_loss(pred_imgs.view(-1,3,h,w), frames.view(-1,3,h,w))[0] * self.config['losses']['perceptual_weight']
+                    gen_loss += perc_loss
+                    self.add_summary(self.gen_writer, 'loss/perc_loss', perc_loss.item())
+
+                # gan loss
+                if not self.config['model']['no_dis']:
+                    # generator adversarial loss
+                    gen_clip = self.netD(comp_imgs)
+                    gan_loss = self.adversarial_loss(gen_clip, True, False)
+                    
+                    
+                    
+                    gen_clip2 = self.netD2(comp_imgs_small) #reduce resolution
+                    gan_loss2 = self.adversarial_loss(gen_clip2, True, False)
+                    gan_loss = (gan_loss + gan_loss2) * self.config['losses']['adversarial_weight']
+                    gen_loss += gan_loss
+                    self.add_summary(self.gen_writer, 'loss/gan_loss', gan_loss.item())
+                gen_loss.backward()
+                self.optimG.step()
+                
+            
+            B, T, C, H, W = scaled_influences.shape
+
+            # flatten time
+            x = scaled_influences.view(B * T, C, H, W)
+
+            # downscale
+            x_small = F.interpolate(
+                x,
+                scale_factor=1.0/d2downscale,   # or 0.25
+                mode='area'         # recommended for downscaling
+            )
+
+            # reshape back
+            scaled_influences_small = x_small.view(
+                B, T, C,
+                x_small.shape[-2],
+                x_small.shape[-1]
+            )
+
+            if True: #for i in range(4): #For loop while model is new
+                
+                dis_loss = 0
+                dis2_loss = 0
+                
                 # optimize net_d
                 for p in self.netD.parameters():
                     p.requires_grad = True
+                for p in self.netD2.parameters():
+                    p.requires_grad = True
                 self.optimD.zero_grad()
+                self.optimD2.zero_grad()
 
                 # discriminator adversarial loss
-                real_clip = self.netD(frames)
+                real_clip = self.netD(scaled_influences) # here we use the blurred images instead
                 fake_clip = self.netD(comp_imgs.detach())
                 dis_real_loss = self.adversarial_loss(real_clip, True, True)
                 dis_fake_loss = self.adversarial_loss(fake_clip, False, True)
@@ -443,6 +545,19 @@ class Trainer:
                 self.add_summary(self.dis_writer, 'loss/dis_vid_fake', dis_fake_loss.item())
                 dis_loss.backward()
                 self.optimD.step()
+                
+                
+                
+                # discriminator adversarial loss
+                real_clip = self.netD2(scaled_influences_small) # here we use the blurred images instead
+                fake_clip = self.netD2(comp_imgs_small.detach())
+                dis2_real_loss = self.adversarial_loss(real_clip, True, True)
+                dis2_fake_loss = self.adversarial_loss(fake_clip, False, True)
+                dis2_loss += (dis2_real_loss + dis2_fake_loss) / 2
+                self.add_summary(self.dis_writer, 'loss/dis2_vid_real', dis_real_loss.item())
+                self.add_summary(self.dis_writer, 'loss/dis2_vid_fake', dis2_fake_loss.item())
+                dis2_loss.backward()
+                self.optimD2.step()
 
             self.update_learning_rate()
 
@@ -481,7 +596,7 @@ class Trainer:
             if self.config['global_rank'] == 0:
                 pbar.update(1)
                 if not self.config['model']['no_dis']:
-                    pbar.set_description((f"d: {dis_loss.item():.3f}; "
+                    pbar.set_description((f"d: {dis_loss.item():.3f}; {dis_real_loss.item():.4f} :: {dis_fake_loss.item():.4f} ;"
                                           f"hole: {hole_loss.item():.3f}; "
                                           f"valid: {valid_loss.item():.3f}"))
                 else:
@@ -491,7 +606,7 @@ class Trainer:
                 if self.iteration % self.train_args['log_freq'] == 0:
                     if not self.config['model']['no_dis']:
                         logging.info(f"[Iter {self.iteration}] "
-                                     f"d: {dis_loss.item():.4f}; "
+                                     f"d: {dis_loss.item():.4f};  {dis_real_loss.item():.4f} :: {dis_fake_loss.item():.4f} "
                                      f"hole: {hole_loss.item():.4f}; "
                                      f"valid: {valid_loss.item():.4f}")
                     else:

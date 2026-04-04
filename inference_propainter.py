@@ -192,7 +192,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--width', type=int, default=-1, help='Width of the processing video.')
     parser.add_argument(
-        '--mask_dilation', type=int, default=4, help='Mask dilation for video and flow masking.')
+        '--mask_dilation', type=int, default=0, help='Mask dilation for video and flow masking.')
     parser.add_argument(
         "--ref_stride", type=int, default=10, help='Stride of global reference frames.')
     parser.add_argument(
@@ -231,8 +231,8 @@ if __name__ == '__main__':
     
     fps = args.save_fps if fps is None else fps
     save_root = os.path.join(args.output, video_name)
-    if not os.path.exists(save_root):
-        os.makedirs(save_root, exist_ok=True)
+    #if not os.path.exists(save_root):
+    #    os.makedirs(save_root, exist_ok=True)
 
     if args.mode == 'video_inpainting':
         frames_len = len(frames)
@@ -468,8 +468,8 @@ if __name__ == '__main__':
     # save videos frame
     masked_frame_for_save = [cv2.resize(f, out_size) for f in masked_frame_for_save]
     comp_frames = [cv2.resize(f, out_size) for f in comp_frames]
-    imageio.mimwrite(os.path.join(save_root, 'masked_in.mp4'), masked_frame_for_save, fps=fps, quality=7)
-    imageio.mimwrite(os.path.join(save_root, 'inpaint_out.mp4'), comp_frames, fps=fps, quality=7)
+    imageio.mimwrite(save_root+'_masked_in.mp4', masked_frame_for_save, fps=fps, quality=7)
+    imageio.mimwrite(save_root+'_inpaint_out.mp4', comp_frames, fps=fps, quality=7)
     
     print(f'\nAll results are saved in {save_root}')
     
