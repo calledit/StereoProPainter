@@ -34,6 +34,10 @@ On top of that a second disriminator was added.
 
 Since there is a certain patern to how stereo infill masks are created there is also a certain patern to how one can infill them to make the model better att using that pattern in its inpanting StereProPainter was finetuned with reprojected images.
 
+# Result
+
+https://github.com/user-attachments/assets/2aba52fc-c5f5-427c-8048-628167006e5e
+
 # Right eye video
 
 ### Low fps videos:
