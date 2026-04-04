@@ -35,8 +35,22 @@ On top of that a second disriminator was added.
 Since there is a certain patern to how stereo infill masks are created there is also a certain patern to how one can infill them to make the model better att using that pattern in its inpanting StereProPainter was finetuned with reprojected images.
 
 # Right eye video
-While the results are decent the flicker is quite bad:
-https://github.com/calledit/StereoProPainter/releases/download/weights/right_eye_inpaint_out_stereo_model.mp4
 
-Input mask visulization: https://github.com/calledit/StereoProPainter/releases/download/weights/right_eye_masked_in.mp4
+### Low fps videos:
+Right eye infilled video of cat:
+* https://github.com/calledit/StereoProPainter/releases/download/weights/0a7a2514aa_inpaint_out.mp4
+
+Right eye infilled video of moving buss:
+* https://github.com/calledit/StereoProPainter/releases/download/weights/1a5fe06b00_inpaint_out.mp4
+
+
+### 30 FPS video
+Right eye infilled vide Moving in woods: (loots of flicker)
+* https://github.com/calledit/StereoProPainter/releases/download/weights/right_eye_inpaint_out_stereo_model.mp4
+
+Input mask visulizations:
+
+* https://github.com/calledit/StereoProPainter/releases/download/weights/right_eye_masked_in.mp4
+* https://github.com/calledit/StereoProPainter/releases/download/weights/0a7a2514aa_masked_in.mp4
+* https://github.com/calledit/StereoProPainter/releases/download/weights/1a5fe06b00_masked_in.mp4
 
