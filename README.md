@@ -29,16 +29,18 @@ To make StereProPainter better at stereo inpainting the adversarial_weight was i
 
 While most holes are small there are still is sections where the holes are quite big in these holes you dont want the model to guess about details in the image. You want to rely more on L1 loss there. If you let the descriminator make the generator guess about what should be in those areas it will halucinate wildly. In test anything that is more than about 10 pixels away from real known data and has complex pattern (ie the image is not obvoiusly something like a solid colored wall) will start to be infilled with halucinated artifacts.
 
-StereProPainter way to deal with this can be to blur the distant regions when traning the descriminator. That works but since bluring with a simple kernel and bluring as produced with an ai tranied with L1 loss are slightly diffrent that may lead to worse results. The best solution would be to blur using a network that was only trained on a L1 loss. But that is in practicallity to expensive.
+StereProPainter's way to deal with this is to blur the distant regions when traning the descriminator. That works but since bluring with a simple kernel and bluring as produced with an ai tranied with L1 loss are slightly diffrent that may lead to worse results. The best solution would be to blur using a network that was only trained on a L1 loss. But that is in practicallity to expensive.
 On top of that a second disriminator was added.
 
 Since there is a certain patern to how stereo infill masks are created there is also a certain patern to how one can infill them to make the model better att using that pattern in its inpanting StereProPainter was finetuned with reprojected images.
 
 # Result
+The result is aceptable more or less SOTA, but temporal inconsitency is visible and there is a slight flicker.
 
 https://github.com/user-attachments/assets/2aba52fc-c5f5-427c-8048-628167006e5e
 
-# Right eye video
+
+## Right eye video
 
 ### Low fps videos:
 Right eye infilled video of cat:
@@ -58,3 +60,15 @@ Input mask visulizations:
 * https://github.com/calledit/StereoProPainter/releases/download/weights/0a7a2514aa_masked_in.mp4
 * https://github.com/calledit/StereoProPainter/releases/download/weights/1a5fe06b00_masked_in.mp4
 
+
+# Next step
+
+Given the issues with temporal stability fixing that is seen as the main issue. The standard way of achieving temporal stability is to use a video auto encoder(VAE) the VAE takes a chunk of frames and converts them in to a latent space where the position and timing of things in the image are mixed. After the chunk of frames has been moved to the latent space you apply a modifier nural net to modify the chunk while it is still in latent space. After that you decode the data back in to pixel space again using the VAE decoder. This method generally achieves temporal consistency.
+
+The big problem with this approach is that the infill mask you want to use is not in latent space. This means that the mask will be very hard for the mofifer net to understand. And infact previous attempts like the network use in StereoCrafter largly ignores the mask input it is given and does infill based on where there is black with small dots sprinkeld in the video.
+
+**There are ways to solve this:**
+
+* The best option for pure quality would be to train a new VAE that takes 4 channels (RGB+extra) instead of just 3 channels (RGB). This is however prohibetivly expensive and would require large compute farms.
+* There are some papers that describe 4 channel VAE's like (https://arxiv.org/pdf/2509.24979) however they are not true 4 channel VAE's but two separate VAE's one RGB and one Alpha who's resulting latent space is concaternated. This does kind of work but it is not optimal for what we are trying to achievie.
+* The cheapest way to deal with this issue is to add the MASK directly to the RGB by doing a "greenscreen effect". The VAE will then encode the mask straigt in to the latent space. The main issue with this is that green color that is in the video which is not part of the mask will be seen as the mask by the modifer network.  
