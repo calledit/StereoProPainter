@@ -72,3 +72,6 @@ The big problem with this approach is that the infill mask you want to use is no
 * The best option for pure quality would be to train a new VAE that takes 4 channels (RGB+extra) instead of just 3 channels (RGB). This is however prohibetivly expensive and would require large compute farms.
 * There are some papers that describe 4 channel VAE's like (https://arxiv.org/pdf/2509.24979) however they are not true 4 channel VAE's but two separate VAE's one RGB and one Alpha who's resulting latent space is concaternated. This does kind of work but it is not optimal for what we are trying to achievie.
 * The cheapest way to deal with this issue is to add the MASK directly to the RGB by doing a "greenscreen effect". The VAE will then encode the mask straigt in to the latent space. The main issue with this is that green color that is in the video which is not part of the mask will be seen as the mask by the modifer network.  
+
+New project avalibele here:
+https://github.com/calledit/one_shot_stereo
